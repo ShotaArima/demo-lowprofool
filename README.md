@@ -87,4 +87,4 @@ docker compose up -d # run
     # RUN echo "font.family : IPAexGothic" >>  {/opt/conda/~/matplotlibrc}
     ```
 5. dockerfile内の`#日本語フォントの設定`の下のコード全てのコメントアウトを解除します。
-6. コンテナを起動し、問題がないことを確認してください。
+6. コンテナを起動し、問題がないことを確認してください。# lowprofool
