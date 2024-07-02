@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from torch.autograd.gradcheck import zero_gradients
+# from torch.autograd.gradcheck import zero_gradients
 
 # Clipping function
 def clip(current, low_bound, up_bound):
@@ -52,7 +52,8 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     loop_i, loop_change_class = 0, 0
     while loop_i < maxiters:
             
-        zero_gradients(r)
+        # zero_gradients(r)
+        r.rrad = None
 
         # Computing loss 
         loss_1 = bce(output, target)
@@ -146,7 +147,8 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         grad_orig = x.grad.data.numpy().copy()
         
         # Target class
-        zero_gradients(x)
+        # zero_gradients(x)
+        x.grad = None
         output[I[1]].backward(retain_graph=True)
         cur_grad = x.grad.data.numpy().copy()
             
