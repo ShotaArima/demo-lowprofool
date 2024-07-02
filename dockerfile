@@ -15,7 +15,7 @@ SHELL ["/bin/bash", "-c"]
 WORKDIR /src/
 
 # ポートの公開
-EXPOSE 8888
+EXPOSE 9002
 
 # 日本語フォントの設定
 # RUN wget -O font.zip "https://moji.or.jp/wp-content/ipafont/IPAexfont/ipaexg00401.zip"

@@ -1,11 +1,17 @@
-
-name: myenv
+name: lowprofool
 channels:
   - conda-forge
+  - defaults
 dependencies:
-  - python
+  - python=3.7
   - numpy
   - pandas
   - matplotlib
-  - scipy
+  - seaborn
+  - scikit-learn
+  - pytorch
+  - tensorflow
+  - keras
+  - tqdm
+  - openml
   - jupyter

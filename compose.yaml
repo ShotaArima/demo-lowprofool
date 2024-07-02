@@ -6,7 +6,7 @@ services:
     volumes:
       - ./src:/src
     ports:
-      - "8888:8888"
+      - "9002:9002"
     environment:
       - JUPYTER_ENEBLE_LAB=yes
-    command: ["conda", "run", "-n", "pymc_env", "jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--allow-root", "--no-browser", "--NotebookApp.password={$hashedpass}"]
+    command: ["conda", "run", "-n", "lowprofool", "jupyter", "notebook", "--ip=0.0.0.0", "--port=9002", "--allow-root", "--no-browser", "--NotebookApp.password='argon2:$$argon2id$$v=19$$m=10240,t=10,p=8$$MeBj/6RP0wlwBlP4fK1o5g$$VNXWdO8UFIF6FLtJPR9ZM7DdtV+ji4u99/y5PTww77A'"]
