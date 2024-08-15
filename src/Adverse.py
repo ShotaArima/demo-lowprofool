@@ -32,8 +32,18 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
 
     r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
     v = torch.FloatTensor(np.array(weights))
+
+    # デバッグ
+    print("Size of v:", v.size())
+    print("Size of r:", r.size())
+    # loss_2 = l2(v, r)
     
     output = model.forward(x + r)
+
+    # デバッグ
+    # output = model(xi)
+    print("Size of model output:", output.size())
+
     orig_pred = output.max(0, keepdim=True)[1].cpu().numpy()
     target_pred = np.abs(1 - orig_pred)
     
