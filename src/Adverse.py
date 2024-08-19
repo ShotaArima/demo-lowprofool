@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) // 不一致を許容することも視野に入れる
+    assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) # 不一致を許容することも視野に入れる
     low_bound = torch.FloatTensor(low_bound)
     up_bound = torch.FloatTensor(up_bound)
     clipped = torch.max(torch.min(current, up_bound), low_bound)
