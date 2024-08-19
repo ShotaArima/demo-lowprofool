@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound))
+    assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) // 不一致を許容することも視野に入れる
     low_bound = torch.FloatTensor(low_bound)
     up_bound = torch.FloatTensor(up_bound)
     clipped = torch.max(torch.min(current, up_bound), low_bound)
@@ -30,6 +30,19 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     :return: original label prediction, final label prediction, adversarial examples x', iteration at which the class changed
     """
 
+    min_bounds = []
+    max_bounds = []
+    for feature, info in bounds.items():
+        if info['type'] == 'numeric':
+            min_bounds.append(info['min'])
+            max_bounds.append(info['max'])
+        else:
+            min_bounds.append(0)
+            max_bounds.append(len(info['values']) - 1)
+    
+    min_bounds = torch.FloatTensor(min_bounds)
+    max_bounds = torch.FloatTensor(max_bounds)
+
     r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
     r = torch.zeros_like(x, requires_grad=True)
     v = torch.tensor(weights, dtype=torch.float32)
@@ -38,12 +51,10 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     # デバッグ
     print("Size of v:", v.size())
     print("Size of r:", r.size())
-    # loss_2 = l2(v, r)
     
     output = model.forward(x + r)
 
     # デバッグ
-    # output = model(xi)
     print("Size of model output:", output.size())
 
     orig_pred = output.max(0, keepdim=True)[1].cpu().numpy()
@@ -64,8 +75,8 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     loop_i, loop_change_class = 0, 0
     while loop_i < maxiters:
             
-        # zero_gradients(r)
-        r.rrad = None
+        # Zero the gradient
+        r.grad = None
 
         # Computing loss 
         loss_1 = bce(output, target)
@@ -94,8 +105,12 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         # Compute adversarial example
         xprime = x + r
         
+        # デバッグ
+        print("Shape of xprime:", xprime.shape)
+        print("Shape of min_bounds:", min_bounds.shape)
+        print("Shape of max_bounds:", max_bounds.shape)
         # Clip to stay in legitimate bounds
-        xprime = clip(xprime, bounds[0], bounds[1])
+        xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
         output = model.forward(xprime)
@@ -112,7 +127,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         loop_i += 1 
         
     # Clip at the end no matter what
-    best_pert_x = clip(best_pert_x, bounds[0], bounds[1])
+    best_pert_x = clip(best_pert_x, min_bounds, max_bounds)
     output = model.forward(best_pert_x)
     output_pred = output.max(0, keepdim=True)[1].cpu().numpy()
 
