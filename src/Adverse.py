@@ -62,7 +62,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Output range:", output.min().item(), output.max().item())
 
     probs = torch.sigmoid(output)
-    orig_pred = (probs > 0.5).long().cpu().numpy()
+    orig_pred = (probs > 0.5).long().cpu().numpy().squeeze()
     target_pred = 1 - orig_pred
 
     # デバッグ
@@ -131,7 +131,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             output = output.unsqueeze(0)
         # output = torch.clamp(output, 0, 1)
         probs = torch.sigmoid(output)
-        output_pred = (probs > 0.5).long().cpu().numpy()
+        output_pred = (probs > 0.5).long().cpu().numpy().squeeze()
         
         # Keep the best adverse at each iterations
         if not np.array_equal(output_pred, orig_pred) and r_norm_weighted < best_norm_weighted:
@@ -146,9 +146,12 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     # Clip at the end no matter what
     best_pert_x = clip(best_pert_x, min_bounds, max_bounds)
     output = model.forward(best_pert_x)
-    output_pred = output.max(0, keepdim=True)[1].cpu().numpy()
+    if output.dim() == 1:
+        output = output.unsqueeze(1)
+    probs = torch.sigmoid(output)
+    output_pred = output.max(0, keepdim=True)[1].cpu().numpy().squeeze()
 
-    return orig_pred, output_pred, best_pert_x.clone().detach().cpu().numpy(), loop_change_class 
+    return orig_pred.item(), output_pred.item(), best_pert_x.detach().cpu().numpy().squeeze(), loop_change_class 
 
 # Forked from https://github.com/LTS4/DeepFool
 def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
