@@ -38,7 +38,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             max_bounds.append(info['max'])
         elif info['type'] == 'categorical':
             min_bounds.extend([0]*len(info['values']))
-            max_bounds.append([1]*len(info['values']))
+            max_bounds.extend([1]*len(info['values']))
     
     min_bounds = torch.FloatTensor(min_bounds)
     max_bounds = torch.FloatTensor(max_bounds)
@@ -62,7 +62,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Output range:", output.min().item(), output.max().item())
 
     probs = torch.sigmoid(output)
-    orig_pred = (probs > 0.5).long().cpu().numpy().squeeze()
+    orig_pred = (probs > 0.5).long().cpu().numpy().squeeze(0)
     target_pred = 1 - orig_pred
 
     # デバッグ
@@ -70,7 +70,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Shape of target_pred:", target_pred.shape)
     
     target = torch.zeros_like(output)
-    target[target_pred == 1] = 1 # scatterの代わり
+    target[:, target_pred] = 1 # scatterの代わり
     # target = Variable(target, requires_grad=False) 
 
     # デバッグ
@@ -201,7 +201,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         probs[0, I[0]].backward(retain_graph=True)
         grad_orig = x.grad.data.numpy().copy()
         
-        x.grad.zeros_()
+        x.grad.zero_()
 
         # Target class
         probs[0, I[1]].backward(retain_graph=True)
