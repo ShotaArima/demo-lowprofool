@@ -170,6 +170,19 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     x = x_old.clone()
     x = Variable(x, requires_grad=True)
     
+    min_bounds = []
+    max_bounds = []
+    for feature, info in bounds.items():
+        if info['type'] == 'numeric':
+            min_bounds.append(info['min'])
+            max_bounds.append(info['max'])
+        elif info['type'] == 'categorical':
+            min_bounds.extend([0]*len(info['values']))
+            max_bounds.extend([1]*len(info['values']))
+    
+    min_bounds = torch.FloatTensor(min_bounds)
+    max_bounds = torch.FloatTensor(max_bounds)
+
     output = net(x)
     if output.dim() == 1:
         output = output.unsqueeze(0)
@@ -178,7 +191,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
 
     # origin = Variable(torch.tensor([orig_pred], requires_grad=False))
 
-    I = [0, 0] # バイナリ分類のため、i[0]は0, i[1]は0になる
+    # I = [0, 0] # バイナリ分類のため、i[0]は0, i[1]は0になる
     # if orig_pred == 0:
     #     I = [0, 1]
     # else:
@@ -222,18 +235,25 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         r_i =  (pert+1e-4) * w / np.linalg.norm(w)   
         
         if len(weights) > 0:
-            r_i /= np.array(weights)
+            r_i *= np.array(weights)
 
         # limit huge step
         r_i = alpha * r_i / np.linalg.norm(r_i) 
             
         r_tot = np.float32(r_tot + r_i)
         
+        # デバッグ
+        print("Shape of x:", x.shape)
+        print("Shape of output:", output.shape)
+        print("Shape of probs:", probs.shape)
+        print("Shape of r_i:", r_i.shape)
+        print("Shape of r_tot:", r_tot.shape)
         
         pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        pert_x = clip(pert_x, min_bounds, max_bounds)
 
-        if len(bounds) > 0:
-            pert_x = clip(pert_x, bounds[0], bounds[1])
+        # if len(bounds) > 0:
+        #     pert_x = clip(pert_x, min_bounds, max_bounds)
 
         x = Variable(pert_x, requires_grad=True)
 
@@ -249,6 +269,6 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         loop_i += 1
 
     r_tot = (1+overshoot)*r_tot    
-    pert_x = clip(pert_x, bounds[0], bounds[1])
+    pert_x = clip(pert_x, min_bounds, max_bounds)
 
     return orig_pred, k_i, pert_x.cpu(), loop_i
