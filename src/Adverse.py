@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) # 不一致を許容することも視野に入れる
+    # assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) # 不一致を許容することも視野に入れる
     low_bound = torch.FloatTensor(low_bound)
     up_bound = torch.FloatTensor(up_bound)
     clipped = torch.max(torch.min(current, up_bound), low_bound)
@@ -36,9 +36,9 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         if info['type'] == 'numeric':
             min_bounds.append(info['min'])
             max_bounds.append(info['max'])
-        else:
-            min_bounds.append(0)
-            max_bounds.append(len(info['values']) - 1)
+        elif info['type'] == 'categorical':
+            min_bounds.extend([0]*len(info['values']))
+            max_bounds.append([1]*len(info['values']))
     
     min_bounds = torch.FloatTensor(min_bounds)
     max_bounds = torch.FloatTensor(max_bounds)
@@ -52,24 +52,37 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Size of v:", v.size())
     print("Size of r:", r.size())
     
-    output = model.forward(x + r)
+    output = model(x + r)
+    if output.dim() == 1:
+        output = output.unsqueeze(0)
+    # output = torch.clamp(output, 0, 1)
 
     # デバッグ
     print("Size of model output:", output.size())
+    print("Output range:", output.min().item(), output.max().item())
 
-    orig_pred = output.max(0, keepdim=True)[1].cpu().numpy()
-    target_pred = np.abs(1 - orig_pred)
+    probs = torch.sigmoid(output)
+    orig_pred = (probs > 0.5).long().cpu().numpy()
+    target_pred = 1 - orig_pred
+
+    # デバッグ
+    print("Shape of orig_pred:", orig_pred.shape)
+    print("Shape of target_pred:", target_pred.shape)
     
-    target = [0., 1.] if target_pred == 1 else [1., 0.]
-    target = Variable(torch.tensor(target, requires_grad=False)) 
+    target = torch.zeros_like(output)
+    target[target_pred == 1] = 1 # scatterの代わり
+    # target = Variable(target, requires_grad=False) 
+
+    # デバッグ
+    print("Shape of target:", target.shape)
     
     lambda_ = torch.tensor([lambda_])
     
-    bce = nn.BCELoss()
-    l1 = lambda v, r: torch.sum(torch.abs(v * r)) #L1 norm
+    bce = nn.BCEWithLogitsLoss() # BCELossの代わりにBCEWithLogitsLossを使う
+    # l1 = lambda v, r: torch.sum(torch.abs(v * r)) #L1 norm
     l2 = lambda v, r: torch.sqrt(torch.sum(torch.mul(v * r,v * r))) #L2 norm
 
-    best_norm_weighted = np.inf
+    best_norm_weighted = float('inf')
     best_pert_x = x
     
     loop_i, loop_change_class = 0, 0
@@ -81,7 +94,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         # Computing loss 
         loss_1 = bce(output, target)
         loss_2 = l2(v, r)
-        loss = (loss_1 + lambda_ * loss_2)
+        loss = loss_1 + lambda_ * loss_2
 
         # Get the gradient
         loss.backward(retain_graph=True)
@@ -113,18 +126,22 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
-        output = model.forward(xprime)
-        output_pred = output.max(0, keepdim=True)[1].cpu().numpy()
+        output = model(xprime)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        # output = torch.clamp(output, 0, 1)
+        probs = torch.sigmoid(output)
+        output_pred = (probs > 0.5).long().cpu().numpy()
         
         # Keep the best adverse at each iterations
-        if output_pred != orig_pred and r_norm_weighted < best_norm_weighted:
+        if not np.array_equal(output_pred, orig_pred) and r_norm_weighted < best_norm_weighted:
             best_norm_weighted = r_norm_weighted
             best_pert_x = xprime
 
-        if output_pred == orig_pred:
+        if np.array_equal(output_pred, orig_pred):
             loop_change_class += 1
             
-        loop_i += 1 
+        loop_i += 1
         
     # Clip at the end no matter what
     best_pert_x = clip(best_pert_x, min_bounds, max_bounds)
@@ -165,7 +182,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     r_tot = np.zeros(input_shape)
     
     k_i = origin
- 
+
     loop_i = 0
     while torch.eq(k_i, origin) and loop_i < maxiters:
                 
