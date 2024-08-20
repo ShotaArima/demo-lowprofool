@@ -170,38 +170,50 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     x = x_old.clone()
     x = Variable(x, requires_grad=True)
     
-    output = net.forward(x)
-    orig_pred = output.max(0, keepdim=True)[1] # get the index of the max log-probability
+    output = net(x)
+    if output.dim() == 1:
+        output = output.unsqueeze(0)
+    probs = torch.sigmoid(output)
+    orig_pred = (probs > 0.5).long().item() # get the index of the max log-probability
 
-    origin = Variable(torch.tensor([orig_pred], requires_grad=False))
+    # origin = Variable(torch.tensor([orig_pred], requires_grad=False))
 
-    I = []
-    if orig_pred == 0:
-        I = [0, 1]
-    else:
-        I = [1, 0]
+    I = [1-orig_pred, orig_pred] # 反転クラスと元のクラス
+    # if orig_pred == 0:
+    #     I = [0, 1]
+    # else:
+    #     I = [1, 0]
         
     w = np.zeros(input_shape)
     r_tot = np.zeros(input_shape)
     
-    k_i = origin
+    # k_i = origin
 
     loop_i = 0
-    while torch.eq(k_i, origin) and loop_i < maxiters:
+    while loop_i < maxiters:
                 
         # Origin class
-        output[I[0]].backward(retain_graph=True)
+        output = net(x)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        probs = torch.sigmoid(output)
+
+        probs[0, I[0]].backward(retain_graph=True)
         grad_orig = x.grad.data.numpy().copy()
         
+        x.grad.zeros_()
+
         # Target class
-        # zero_gradients(x)
-        x.grad = None
-        output[I[1]].backward(retain_graph=True)
+        probs[0, I[1]].backward(retain_graph=True)
+        
+        # # zero_gradients(x)
+        # x.grad = None
+        # output[I[1]].backward(retain_graph=True)
         cur_grad = x.grad.data.numpy().copy()
             
         # set new w and new f
         w = cur_grad - grad_orig
-        f = (output[I[1]] - output[I[0]]).data.numpy()
+        f = (probs[0, I[1]] - probs[0, I[0]]).data.numpy()
 
         pert = abs(f)/np.linalg.norm(w.flatten())
     
@@ -222,12 +234,14 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
 
         if len(bounds) > 0:
             pert_x = clip(pert_x, bounds[0], bounds[1])
-                
+
         x = Variable(pert_x, requires_grad=True)
- 
-        output = net.forward(x)
-        
-        k_i = torch.tensor(np.argmax(output.data.cpu().numpy().flatten()))
+
+        output = net(x)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        probs = torch.sigmoid(output)
+        k_i = (probs > 0.5).long().item() # get the index of the max log-probability
                     
         loop_i += 1
 
