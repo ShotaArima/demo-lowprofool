@@ -38,7 +38,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             max_bounds.append(info['max'])
         elif info['type'] == 'categorical':
             min_bounds.extend([0]*len(info['values']))
-            max_bounds.append([1]*len(info['values']))
+            max_bounds.extend([1]*len(info['values']))
     
     min_bounds = torch.FloatTensor(min_bounds)
     max_bounds = torch.FloatTensor(max_bounds)
@@ -62,7 +62,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Output range:", output.min().item(), output.max().item())
 
     probs = torch.sigmoid(output)
-    orig_pred = (probs > 0.5).long().cpu().numpy().squeeze()
+    orig_pred = (probs > 0.5).long().cpu().numpy().squeeze(0)
     target_pred = 1 - orig_pred
 
     # デバッグ
@@ -70,7 +70,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     print("Shape of target_pred:", target_pred.shape)
     
     target = torch.zeros_like(output)
-    target[target_pred == 1] = 1 # scatterの代わり
+    target[:, target_pred] = 1 # scatterの代わり
     # target = Variable(target, requires_grad=False) 
 
     # デバッグ
@@ -170,38 +170,63 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     x = x_old.clone()
     x = Variable(x, requires_grad=True)
     
-    output = net.forward(x)
-    orig_pred = output.max(0, keepdim=True)[1] # get the index of the max log-probability
+    min_bounds = []
+    max_bounds = []
+    for feature, info in bounds.items():
+        if info['type'] == 'numeric':
+            min_bounds.append(info['min'])
+            max_bounds.append(info['max'])
+        elif info['type'] == 'categorical':
+            min_bounds.extend([0]*len(info['values']))
+            max_bounds.extend([1]*len(info['values']))
+    
+    min_bounds = torch.FloatTensor(min_bounds)
+    max_bounds = torch.FloatTensor(max_bounds)
 
-    origin = Variable(torch.tensor([orig_pred], requires_grad=False))
+    output = net(x)
+    if output.dim() == 1:
+        output = output.unsqueeze(0)
+    probs = torch.sigmoid(output)
+    orig_pred = (probs > 0.5).long().item() # get the index of the max log-probability
 
-    I = []
-    if orig_pred == 0:
-        I = [0, 1]
-    else:
-        I = [1, 0]
+    # origin = Variable(torch.tensor([orig_pred], requires_grad=False))
+
+    # I = [0, 0] # バイナリ分類のため、i[0]は0, i[1]は0になる
+    # if orig_pred == 0:
+    #     I = [0, 1]
+    # else:
+    #     I = [1, 0]
         
     w = np.zeros(input_shape)
     r_tot = np.zeros(input_shape)
     
-    k_i = origin
+    # k_i = origin
 
     loop_i = 0
-    while torch.eq(k_i, origin) and loop_i < maxiters:
+    while loop_i < maxiters:
                 
         # Origin class
-        output[I[0]].backward(retain_graph=True)
+        output = net(x)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        probs = torch.sigmoid(output)
+
+        probs.backward(retain_graph=True)
         grad_orig = x.grad.data.numpy().copy()
         
+        x.grad.zero_()
+
         # Target class
-        # zero_gradients(x)
-        x.grad = None
-        output[I[1]].backward(retain_graph=True)
+        (1-probs).backward(retain_graph=True)
+        
+        # # zero_gradients(x)
+        # x.grad = None
+        # output[I[1]].backward(retain_graph=True)
         cur_grad = x.grad.data.numpy().copy()
             
         # set new w and new f
         w = cur_grad - grad_orig
-        f = (output[I[1]] - output[I[0]]).data.numpy()
+        f = ((1-probs) - probs).data.numpy()
 
         pert = abs(f)/np.linalg.norm(w.flatten())
     
@@ -210,28 +235,40 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         r_i =  (pert+1e-4) * w / np.linalg.norm(w)   
         
         if len(weights) > 0:
-            r_i /= np.array(weights)
+            r_i *= np.array(weights)
 
         # limit huge step
         r_i = alpha * r_i / np.linalg.norm(r_i) 
             
         r_tot = np.float32(r_tot + r_i)
         
+        # デバッグ
+        print("Shape of x:", x.shape)
+        print("Shape of output:", output.shape)
+        print("Shape of probs:", probs.shape)
+        print("Shape of r_i:", r_i.shape)
+        print("Shape of r_tot:", r_tot.shape)
         
         pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        pert_x = clip(pert_x, min_bounds, max_bounds)
 
-        if len(bounds) > 0:
-            pert_x = clip(pert_x, bounds[0], bounds[1])
-                
+        # if len(bounds) > 0:
+        #     pert_x = clip(pert_x, min_bounds, max_bounds)
+
         x = Variable(pert_x, requires_grad=True)
- 
-        output = net.forward(x)
-        
-        k_i = torch.tensor(np.argmax(output.data.cpu().numpy().flatten()))
+
+        output = net(x)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        probs = torch.sigmoid(output)
+        k_i = (probs > 0.5).long().item() # get the index of the max log-probability
+
+        if k_i != orig_pred:
+            break
                     
         loop_i += 1
 
     r_tot = (1+overshoot)*r_tot    
-    pert_x = clip(pert_x, bounds[0], bounds[1])
+    pert_x = clip(pert_x, min_bounds, max_bounds)
 
     return orig_pred, k_i, pert_x.cpu(), loop_i

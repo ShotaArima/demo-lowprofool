@@ -265,10 +265,12 @@ def add_maj_neighbors(df_adv, df_orig, conf, n_neighbors):
     target = conf['Target']
         
         
-    knn = NearestNeighbors(n_neighbors, metric='l2')
+    # knn = NearestNeighbors(n_neighbors, metric='l2')
+    knn = NearestNeighbors(n_neighbors=n_neighbors, metric='l2')
     knn.fit(df_orig[feature_names], df_orig[target])
     
-    knn_weighted = NearestNeighbors(n_neighbors, metric=weighted_distance, metric_params={'w' : weights})
+    knn_weighted = NearestNeighbors(n_neighbors=n_neighbors, metric=weighted_distance, metric_params={'w': weights})
+    # knn_weighted = NearestNeighbors(n_neighbors, metric=weighted_distance, metric_params={'w' : weights})
     knn_weighted.fit(df_orig[feature_names], df_orig[target])
 
     
