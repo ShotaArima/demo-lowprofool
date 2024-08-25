@@ -90,6 +90,7 @@ def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1)
             
         # Zero the gradient
         r.grad = None
+        output = model(x + r)
 
         # Computing loss 
         loss_1 = bce(output, target)
@@ -97,40 +98,45 @@ def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1)
         loss = loss_1 + lambda_ * loss_2
 
         # Get the gradient
-        loss.backward(retain_graph=True)
-        grad_r = r.grad.data.cpu().numpy().copy()
+        loss.backward()
+        # grad_r = r.grad.data.cpu().numpy().copy()
         
-        # Guide perturbation to the negative of the gradient
-        ri = - grad_r
+        # # Guide perturbation to the negative of the gradient
+        # ri = - grad_r
     
-        # limit huge step
-        ri *= alpha
+        # # limit huge step
+        # ri *= alpha
 
-        # Adds new perturbation to total perturbation
-        r = r.clone().detach().cpu().numpy() + ri
+        # # Adds new perturbation to total perturbation
+        # r = r.clone().detach().cpu().numpy() + ri
         
-        # For later computation
-        r_norm_weighted = np.sum(np.abs(r * weights))
+        # # For later computation
+        # r_norm_weighted = np.sum(np.abs(r * weights))
         
-        # Ready to feed the model
-        r = Variable(torch.FloatTensor(r), requires_grad=True) 
+        # # Ready to feed the model
+        # r = Variable(torch.FloatTensor(r), requires_grad=True) 
         
-        # Compute adversarial example
-        xprime = x + r
+        # # Compute adversarial example
+        # xprime = x + r
         
-        # デバッグ
-        print("Shape of xprime:", xprime.shape)
-        print("Shape of min_bounds:", min_bounds.shape)
-        print("Shape of max_bounds:", max_bounds.shape)
-        # Clip to stay in legitimate bounds
-        xprime = clip(xprime, min_bounds, max_bounds)
+        # # デバッグ
+        # print("Shape of xprime:", xprime.shape)
+        # print("Shape of min_bounds:", min_bounds.shape)
+        # print("Shape of max_bounds:", max_bounds.shape)
+        # # Clip to stay in legitimate bounds
+        # xprime = clip(xprime, min_bounds, max_bounds)
+
+        with torch.no_grad():
+            r -= alpha * r.grad.sign()  # Use sign for stable updates
+            xprime = clip(x + r, min_bounds, max_bounds)
+            r = xprime - x
         
         # Classify adversarial example
         output = model(xprime)
-        if output.dim() == 1:
-            output = output.unsqueeze(0)
-        # output = torch.clamp(output, 0, 1)
-        probs = torch.sigmoid(output)
+        # if output.dim() == 1:
+        #     output = output.unsqueeze(0)
+        # # output = torch.clamp(output, 0, 1)
+        # probs = torch.sigmoid(output)
         output_pred = (probs > 0.5).long().cpu().numpy().squeeze()
         
         # Keep the best adverse at each iterations
