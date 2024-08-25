@@ -16,7 +16,7 @@ def clip(current, low_bound, up_bound):
     return clipped
 
 
-def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
+def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1):
     """
     Generates an adversarial examples x' from an original sample x
 
