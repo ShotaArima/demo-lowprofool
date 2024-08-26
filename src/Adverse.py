@@ -76,7 +76,7 @@ def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1)
     # デバッグ
     print("Shape of target:", target.shape)
     
-    lambda_ = torch.tensor([lambda_])
+    # lambda_ = torch.tensor([lambda_])
     
     bce = nn.BCEWithLogitsLoss() # BCELossの代わりにBCEWithLogitsLossを使う
     # l1 = lambda v, r: torch.sum(torch.abs(v * r)) #L1 norm
@@ -91,6 +91,8 @@ def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1)
         # Zero the gradient
         r.grad = None
         output = model(x + r)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
 
         # Computing loss 
         loss_1 = bce(output, target)
@@ -133,10 +135,10 @@ def lowProFool(x, model, weights, bounds, maxiters=1000, alpha=0.1, lambda_=0.1)
         
         # Classify adversarial example
         output = model(xprime)
-        # if output.dim() == 1:
-        #     output = output.unsqueeze(0)
-        # # output = torch.clamp(output, 0, 1)
-        # probs = torch.sigmoid(output)
+        if output.dim() == 1:
+            output = output.unsqueeze(0)
+        # output = torch.clamp(output, 0, 1)
+        probs = torch.sigmoid(output)
         output_pred = (probs > 0.5).long().cpu().numpy().squeeze()
         
         # Keep the best adverse at each iterations
