@@ -47,39 +47,21 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     r = torch.zeros_like(x, requires_grad=True)
     v = torch.tensor(weights, dtype=torch.float32)
     v = v.expand(x.size()) 
-
-    # デバッグ
-    print("Size of v:", v.size())
-    print("Size of r:", r.size())
     
     output = model(x + r)
     if output.dim() == 1:
         output = output.unsqueeze(0)
-    # output = torch.clamp(output, 0, 1)
-
-    # デバッグ
-    print("Size of model output:", output.size())
-    print("Output range:", output.min().item(), output.max().item())
-
+    
     probs = torch.sigmoid(output)
     orig_pred = (probs > 0.5).long().cpu().numpy().squeeze(0)
     target_pred = 1 - orig_pred
 
-    # デバッグ
-    print("Shape of orig_pred:", orig_pred.shape)
-    print("Shape of target_pred:", target_pred.shape)
-    
     target = torch.zeros_like(output)
-    target[:, target_pred] = 1 # scatterの代わり
-    # target = Variable(target, requires_grad=False) 
-
-    # デバッグ
-    print("Shape of target:", target.shape)
+    target[:, target_pred] = 1
     
     lambda_ = torch.tensor([lambda_])
     
-    bce = nn.BCEWithLogitsLoss() # BCELossの代わりにBCEWithLogitsLossを使う
-    # l1 = lambda v, r: torch.sum(torch.abs(v * r)) #L1 norm
+    bce = nn.BCEWithLogitsLoss()
     l2 = lambda v, r: torch.sqrt(torch.sum(torch.mul(v * r,v * r))) #L2 norm
 
     best_norm_weighted = float('inf')
@@ -117,19 +99,13 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         
         # Compute adversarial example
         xprime = x + r
-        
-        # デバッグ
-        print("Shape of xprime:", xprime.shape)
-        print("Shape of min_bounds:", min_bounds.shape)
-        print("Shape of max_bounds:", max_bounds.shape)
-        # Clip to stay in legitimate bounds
         xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
         output = model(xprime)
         if output.dim() == 1:
             output = output.unsqueeze(0)
-        # output = torch.clamp(output, 0, 1)
+
         probs = torch.sigmoid(output)
         output_pred = (probs > 0.5).long().cpu().numpy().squeeze()
         
@@ -189,18 +165,8 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     probs = torch.sigmoid(output)
     orig_pred = (probs > 0.5).long().item() # get the index of the max log-probability
 
-    # origin = Variable(torch.tensor([orig_pred], requires_grad=False))
-
-    # I = [0, 0] # バイナリ分類のため、i[0]は0, i[1]は0になる
-    # if orig_pred == 0:
-    #     I = [0, 1]
-    # else:
-    #     I = [1, 0]
-        
     w = np.zeros(input_shape)
     r_tot = np.zeros(input_shape)
-    
-    # k_i = origin
 
     loop_i = 0
     while loop_i < maxiters:
@@ -219,9 +185,6 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         # Target class
         (1-probs).backward(retain_graph=True)
         
-        # # zero_gradients(x)
-        # x.grad = None
-        # output[I[1]].backward(retain_graph=True)
         cur_grad = x.grad.data.numpy().copy()
             
         # set new w and new f
@@ -242,18 +205,8 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
             
         r_tot = np.float32(r_tot + r_i)
         
-        # デバッグ
-        print("Shape of x:", x.shape)
-        print("Shape of output:", output.shape)
-        print("Shape of probs:", probs.shape)
-        print("Shape of r_i:", r_i.shape)
-        print("Shape of r_tot:", r_tot.shape)
-        
         pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
         pert_x = clip(pert_x, min_bounds, max_bounds)
-
-        # if len(bounds) > 0:
-        #     pert_x = clip(pert_x, min_bounds, max_bounds)
 
         x = Variable(pert_x, requires_grad=True)
 
