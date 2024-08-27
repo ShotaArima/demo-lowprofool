@@ -57,7 +57,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     target_pred = 1 - orig_pred
 
     target = torch.zeros_like(output)
-    target[:, target_pred] = 1
+    target[0, 0] = target_pred
     
     lambda_ = torch.tensor([lambda_])
     
