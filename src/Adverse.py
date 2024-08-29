@@ -5,11 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-# from torch.autograd.gradcheck import zero_gradients
+
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    # assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) # 不一致を許容することも視野に入れる
     low_bound = torch.FloatTensor(low_bound)
     up_bound = torch.FloatTensor(up_bound)
     clipped = torch.max(torch.min(current, up_bound), low_bound)
@@ -163,14 +162,13 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     if output.dim() == 1:
         output = output.unsqueeze(0)
     probs = torch.sigmoid(output)
-    orig_pred = (probs > 0.5).long().item() # get the index of the max log-probability
+    orig_pred = (probs > 0.5).long().item()
 
     w = np.zeros(input_shape)
     r_tot = np.zeros(input_shape)
 
     loop_i = 0
     while loop_i < maxiters:
-                
         # Origin class
         output = net(x)
         if output.dim() == 1:
@@ -186,7 +184,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         (1-probs).backward(retain_graph=True)
         
         cur_grad = x.grad.data.numpy().copy()
-            
+        
         # set new w and new f
         w = cur_grad - grad_orig
         f = ((1-probs) - probs).data.numpy()
@@ -214,7 +212,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         if output.dim() == 1:
             output = output.unsqueeze(0)
         probs = torch.sigmoid(output)
-        k_i = (probs > 0.5).long().item() # get the index of the max log-probability
+        k_i = (probs > 0.5).long().item()
 
         if k_i != orig_pred:
             break
