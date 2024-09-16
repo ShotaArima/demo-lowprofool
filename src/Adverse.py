@@ -98,6 +98,12 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         
         # Compute adversarial example
         xprime = x + r
+
+        # デバッグ
+        print("min_bound", min_bounds)
+        print("max_bound", max_bounds)
+        print("xprime", xprime)
+        print("xprime.shape", xprime.shape)
         xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
