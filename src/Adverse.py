@@ -96,12 +96,18 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         # Ready to feed the model
         r = Variable(torch.FloatTensor(r), requires_grad=True) 
         
+        print("x shape:", x.shape)
+        print("x:", x)
+        print("r shape:", r.shape)
+        print("r:", r)
         # Compute adversarial example
         xprime = x + r
 
         # デバッグ
         print("min_bound", min_bounds)
+        print("min_bound.shape", min_bounds.shape)
         print("max_bound", max_bounds)
+        print("max_bound.shape", max_bounds.shape)
         print("xprime", xprime)
         print("xprime.shape", xprime.shape)
         xprime = clip(xprime, min_bounds, max_bounds)
