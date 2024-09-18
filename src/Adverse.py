@@ -9,10 +9,39 @@ from torch.autograd import Variable
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    low_bound = torch.FloatTensor(low_bound)
-    up_bound = torch.FloatTensor(up_bound)
+    # low_bound = torch.FloatTensor(low_bound)
+    # up_bound = torch.FloatTensor(up_bound)
+
+    low_bound = low_bound.to(current.dtype)
+    up_bound = up_bound.to(current.dtype)
+
+    # サイズが一致していることを確認
+    # assert current.size() == low_bound.size() == up_bound.size(), "Sizes must match"
+    assert current.size() == low_bound.size() == up_bound.size(), f"Sizes must match: current {current.size()}, low_bound {low_bound.size()}, up_bound {up_bound.size()}"
+
     clipped = torch.max(torch.min(current, up_bound), low_bound)
     return clipped
+
+# def expand_bounds(bounds, target_size):
+#     expanded = []
+#     for value in bounds:
+#         if len(expanded) < target_size:
+#             expanded.append(value)
+#         else:
+#             expanded.extend([0, 1])  # カテゴリカル変数の境界
+#     return torch.tensor(expanded)
+
+def expand_bounds(bounds, target_size):
+    expanded = bounds.copy()
+    while len(expanded) < target_size:
+        expanded.append(0)  # カテゴリカル変数の下限
+    return expanded
+
+def expand_max_bounds(bounds, target_size):
+    expanded = bounds.copy()
+    while len(expanded) < target_size:
+        expanded.append(1)  # カテゴリカル変数の上限
+    return expanded
 
 
 def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
@@ -38,14 +67,28 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         elif info['type'] == 'categorical':
             min_bounds.extend([0]*len(info['values']))
             max_bounds.extend([1]*len(info['values']))
+    print("Original min_bounds", min_bounds)
+    print("Original max_bounds", max_bounds)
     
-    min_bounds = torch.FloatTensor(min_bounds)
-    max_bounds = torch.FloatTensor(max_bounds)
+    # onr-hot encoding
+    min_bounds = expand_bounds(min_bounds, x.size(0))
+    max_bounds = expand_max_bounds(max_bounds, x.size(0))
+    print("min_bounds", min_bounds)
+    print("max_bounds", max_bounds)
 
-    r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
+    min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
+    max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
+
+    # r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
     r = torch.zeros_like(x, requires_grad=True)
     v = torch.tensor(weights, dtype=torch.float32)
     v = v.expand(x.size()) 
+
+    print("r after initialization:", r)
+    print("min_bounds dtype:", min_bounds.dtype)
+    print("max_bounds dtype:", max_bounds.dtype)
+    print("x dtype:", x.dtype)
+    print("r dtype:", r.dtype)
     
     output = model(x + r)
     if output.dim() == 1:
@@ -70,7 +113,8 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     while loop_i < maxiters:
             
         # Zero the gradient
-        r.grad = None
+        # r.grad = None
+        r.grad.zero_()
 
         # Computing loss 
         loss_1 = bce(output, target)
