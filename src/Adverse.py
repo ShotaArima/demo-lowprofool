@@ -114,7 +114,10 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             
         # Zero the gradient
         # r.grad = None
-        r.grad.zero_()
+        if r.grad is not None:
+            r.grad.zero_()
+        else:
+            r.requires_grad_(True)
 
         # Computing loss 
         loss_1 = bce(output, target)
