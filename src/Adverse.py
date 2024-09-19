@@ -187,6 +187,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
 
     return orig_pred.item(), output_pred.item(), best_pert_x.detach().cpu().numpy().squeeze(), loop_change_class 
 
+
 # Forked from https://github.com/LTS4/DeepFool
 def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     """
