@@ -67,14 +67,14 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         elif info['type'] == 'categorical':
             min_bounds.extend([0]*len(info['values']))
             max_bounds.extend([1]*len(info['values']))
-    print("Original min_bounds", min_bounds)
-    print("Original max_bounds", max_bounds)
+    # print("Original min_bounds", min_bounds)
+    # print("Original max_bounds", max_bounds)
     
     # onr-hot encoding
     min_bounds = expand_bounds(min_bounds, x.size(0))
     max_bounds = expand_max_bounds(max_bounds, x.size(0))
-    print("min_bounds", min_bounds)
-    print("max_bounds", max_bounds)
+    # print("min_bounds", min_bounds)
+    # print("max_bounds", max_bounds)
 
     min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
     max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
@@ -84,11 +84,11 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     v = torch.tensor(weights, dtype=torch.float32)
     v = v.expand(x.size()) 
 
-    print("r after initialization:", r)
-    print("min_bounds dtype:", min_bounds.dtype)
-    print("max_bounds dtype:", max_bounds.dtype)
-    print("x dtype:", x.dtype)
-    print("r dtype:", r.dtype)
+    # print("r after initialization:", r)
+    # print("min_bounds dtype:", min_bounds.dtype)
+    # print("max_bounds dtype:", max_bounds.dtype)
+    # print("x dtype:", x.dtype)
+    # print("r dtype:", r.dtype)
     
     output = model(x + r)
     if output.dim() == 1:
@@ -143,20 +143,20 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         # Ready to feed the model
         r = Variable(torch.FloatTensor(r), requires_grad=True) 
         
-        print("x shape:", x.shape)
-        print("x:", x)
-        print("r shape:", r.shape)
-        print("r:", r)
+        # print("x shape:", x.shape)
+        # print("x:", x)
+        # print("r shape:", r.shape)
+        # print("r:", r)
         # Compute adversarial example
         xprime = x + r
 
         # デバッグ
-        print("min_bound", min_bounds)
-        print("min_bound.shape", min_bounds.shape)
-        print("max_bound", max_bounds)
-        print("max_bound.shape", max_bounds.shape)
-        print("xprime", xprime)
-        print("xprime.shape", xprime.shape)
+        # print("min_bound", min_bounds)
+        # print("min_bound.shape", min_bounds.shape)
+        # print("max_bound", max_bounds)
+        # print("max_bound.shape", max_bounds.shape)
+        # print("xprime", xprime)
+        # print("xprime.shape", xprime.shape)
         xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
@@ -177,7 +177,6 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             
         loop_i += 1
         
-    print("complete loop処理")
     # Clip at the end no matter what
     best_pert_x = clip(best_pert_x, min_bounds, max_bounds)
     output = model.forward(best_pert_x)
