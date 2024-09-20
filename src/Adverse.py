@@ -201,8 +201,9 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     :return: minimal perturbation that fools the classifier, number of iterations that it required, new estimated_label and perturbed image
     """
     
-    input_shape = x_old.numpy().shape
-    x = x_old.clone()
+    # input_shape = x_old.numpy().shape
+    # x = x_old.clone()
+    x = x_old.clone().view(-1)
     x = Variable(x, requires_grad=True)
     
     min_bounds = []
@@ -222,57 +223,76 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
     max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
 
-    output = net(x)
+    # output = net(x)
+    output = net(x.unsqueeze(0))
     if output.dim() == 1:
         output = output.unsqueeze(0)
     probs = torch.sigmoid(output)
     orig_pred = (probs > 0.5).long().item()
 
-    w = np.zeros(input_shape)
-    r_tot = np.zeros(input_shape)
+    # w = np.zeros(input_shape)
+    # r_tot = np.zeros(input_shape)
+    w = torch.zeros_like(x)
+    r_tot = torch.zeros_like(x)
 
     loop_i = 0
     while loop_i < maxiters:
         # Origin class
-        output = net(x)
+        # output = net(x)
+        output = net(x.unsqueeze(0))
         if output.dim() == 1:
             output = output.unsqueeze(0)
         probs = torch.sigmoid(output)
 
         probs.backward(retain_graph=True)
-        grad_orig = x.grad.data.numpy().copy()
+        # grad_orig = x.grad.data.numpy().copy()
+        grad_orig = x.grad.data.clone()
         
         x.grad.zero_()
 
         # Target class
         (1-probs).backward(retain_graph=True)
         
-        cur_grad = x.grad.data.numpy().copy()
+        # cur_grad = x.grad.data.numpy().copy()
+        cur_grad = x.grad.data.clone()
         
         # set new w and new f
         w = cur_grad - grad_orig
-        f = ((1-probs) - probs).data.numpy()
+        # f = ((1-probs) - probs).data.numpy()
+        f = ((1-probs) - probs).data.squeeze()
 
-        pert = abs(f)/np.linalg.norm(w.flatten())
+        # pert = abs(f)/np.linalg.norm(w.flatten())
+        pert = torch.abs(f) / torch.norm()
     
         # compute r_i and r_tot
         # Added 1e-4 for numerical stability
-        r_i =  (pert+1e-4) * w / np.linalg.norm(w)   
+        # r_i =  (pert+1e-4) * w / np.linalg.norm(w)
+        r_i =  (pert+1e-4) * w / w.norm()
         
         if len(weights) > 0:
-            r_i *= np.array(weights)
+            # r_i *= np.array(weights)
+            r_i *= torch.tensor(weights, dtype=torch.float32)
 
         # limit huge step
-        r_i = alpha * r_i / np.linalg.norm(r_i) 
+        # r_i = alpha * r_i / np.linalg.norm(r_i) 
+        r_i = alpha * r_i / r_i.norm()
             
-        r_tot = np.float32(r_tot + r_i)
-        
+        # r_tot = np.float32(r_tot + r_i)
+        r_tot = r_tot + r_i
         pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        pert_x = x_old.view(-1) + (1 + overshoot) * r_tot
+        print("pert_x", pert_x)
+        print("pert_x.shape", pert_x.shape)
+        print("min_bounds", min_bounds)
+        print("min_bounds.shape", min_bounds.shape)
+        print("max_bounds", max_bounds)
+        print("max_bounds.shape", max_bounds.shape)
         pert_x = clip(pert_x, min_bounds, max_bounds)
 
         x = Variable(pert_x, requires_grad=True)
 
-        output = net(x)
+        # output = net(x)
+        output = net(x.unsqueeze(0))
         if output.dim() == 1:
             output = output.unsqueeze(0)
         probs = torch.sigmoid(output)
