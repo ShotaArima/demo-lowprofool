@@ -262,7 +262,7 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         f = ((1-probs) - probs).data.squeeze()
 
         # pert = abs(f)/np.linalg.norm(w.flatten())
-        pert = torch.abs(f) / torch.norm()
+        pert = torch.abs(f) / w.norm()
     
         # compute r_i and r_tot
         # Added 1e-4 for numerical stability
@@ -279,7 +279,8 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
             
         # r_tot = np.float32(r_tot + r_i)
         r_tot = r_tot + r_i
-        pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        # pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        pert_x = x_old + (1 + overshoot) * r_tot
         pert_x = x_old.view(-1) + (1 + overshoot) * r_tot
         print("pert_x", pert_x)
         print("pert_x.shape", pert_x.shape)
