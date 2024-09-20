@@ -177,6 +177,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
             
         loop_i += 1
         
+    print("complete loop処理")
     # Clip at the end no matter what
     best_pert_x = clip(best_pert_x, min_bounds, max_bounds)
     output = model.forward(best_pert_x)
@@ -215,8 +216,12 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
             min_bounds.extend([0]*len(info['values']))
             max_bounds.extend([1]*len(info['values']))
     
-    min_bounds = torch.FloatTensor(min_bounds)
-    max_bounds = torch.FloatTensor(max_bounds)
+    # min_bounds = torch.FloatTensor(min_bounds)
+    # max_bounds = torch.FloatTensor(max_bounds)
+    min_bounds = expand_bounds(min_bounds, x.size(0))
+    max_bounds = expand_max_bounds(max_bounds, x.size(0))
+    min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
+    max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
 
     output = net(x)
     if output.dim() == 1:
