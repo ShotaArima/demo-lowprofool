@@ -5,15 +5,43 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-# from torch.autograd.gradcheck import zero_gradients
+
 
 # Clipping function
 def clip(current, low_bound, up_bound):
-    # assert(len(current) == len(up_bound) and len(low_bound) == len(up_bound)) # 不一致を許容することも視野に入れる
-    low_bound = torch.FloatTensor(low_bound)
-    up_bound = torch.FloatTensor(up_bound)
+    # low_bound = torch.FloatTensor(low_bound)
+    # up_bound = torch.FloatTensor(up_bound)
+
+    low_bound = low_bound.to(current.dtype)
+    up_bound = up_bound.to(current.dtype)
+
+    # サイズが一致していることを確認
+    # assert current.size() == low_bound.size() == up_bound.size(), "Sizes must match"
+    assert current.size() == low_bound.size() == up_bound.size(), f"Sizes must match: current {current.size()}, low_bound {low_bound.size()}, up_bound {up_bound.size()}"
+
     clipped = torch.max(torch.min(current, up_bound), low_bound)
     return clipped
+
+# def expand_bounds(bounds, target_size):
+#     expanded = []
+#     for value in bounds:
+#         if len(expanded) < target_size:
+#             expanded.append(value)
+#         else:
+#             expanded.extend([0, 1])  # カテゴリカル変数の境界
+#     return torch.tensor(expanded)
+
+def expand_bounds(bounds, target_size):
+    expanded = bounds.copy()
+    while len(expanded) < target_size:
+        expanded.append(0)  # カテゴリカル変数の下限
+    return expanded
+
+def expand_max_bounds(bounds, target_size):
+    expanded = bounds.copy()
+    while len(expanded) < target_size:
+        expanded.append(1)  # カテゴリカル変数の上限
+    return expanded
 
 
 def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
@@ -39,14 +67,28 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         elif info['type'] == 'categorical':
             min_bounds.extend([0]*len(info['values']))
             max_bounds.extend([1]*len(info['values']))
+    # print("Original min_bounds", min_bounds)
+    # print("Original max_bounds", max_bounds)
     
-    min_bounds = torch.FloatTensor(min_bounds)
-    max_bounds = torch.FloatTensor(max_bounds)
+    # onr-hot encoding
+    min_bounds = expand_bounds(min_bounds, x.size(0))
+    max_bounds = expand_max_bounds(max_bounds, x.size(0))
+    # print("min_bounds", min_bounds)
+    # print("max_bounds", max_bounds)
 
-    r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
+    min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
+    max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
+
+    # r = Variable(torch.FloatTensor(1e-4 * np.ones(x.numpy().shape)), requires_grad=True) 
     r = torch.zeros_like(x, requires_grad=True)
     v = torch.tensor(weights, dtype=torch.float32)
     v = v.expand(x.size()) 
+
+    # print("r after initialization:", r)
+    # print("min_bounds dtype:", min_bounds.dtype)
+    # print("max_bounds dtype:", max_bounds.dtype)
+    # print("x dtype:", x.dtype)
+    # print("r dtype:", r.dtype)
     
     output = model(x + r)
     if output.dim() == 1:
@@ -71,7 +113,11 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
     while loop_i < maxiters:
             
         # Zero the gradient
-        r.grad = None
+        # r.grad = None
+        if r.grad is not None:
+            r.grad.zero_()
+        else:
+            r.requires_grad_(True)
 
         # Computing loss 
         loss_1 = bce(output, target)
@@ -97,8 +143,20 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
         # Ready to feed the model
         r = Variable(torch.FloatTensor(r), requires_grad=True) 
         
+        # print("x shape:", x.shape)
+        # print("x:", x)
+        # print("r shape:", r.shape)
+        # print("r:", r)
         # Compute adversarial example
         xprime = x + r
+
+        # デバッグ
+        # print("min_bound", min_bounds)
+        # print("min_bound.shape", min_bounds.shape)
+        # print("max_bound", max_bounds)
+        # print("max_bound.shape", max_bounds.shape)
+        # print("xprime", xprime)
+        # print("xprime.shape", xprime.shape)
         xprime = clip(xprime, min_bounds, max_bounds)
         
         # Classify adversarial example
@@ -129,6 +187,7 @@ def lowProFool(x, model, weights, bounds, maxiters, alpha, lambda_):
 
     return orig_pred.item(), output_pred.item(), best_pert_x.detach().cpu().numpy().squeeze(), loop_change_class 
 
+
 # Forked from https://github.com/LTS4/DeepFool
 def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     """
@@ -142,8 +201,9 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
     :return: minimal perturbation that fools the classifier, number of iterations that it required, new estimated_label and perturbed image
     """
     
-    input_shape = x_old.numpy().shape
-    x = x_old.clone()
+    # input_shape = x_old.numpy().shape
+    # x = x_old.clone()
+    x = x_old.clone().view(-1)
     x = Variable(x, requires_grad=True)
     
     min_bounds = []
@@ -156,65 +216,88 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
             min_bounds.extend([0]*len(info['values']))
             max_bounds.extend([1]*len(info['values']))
     
-    min_bounds = torch.FloatTensor(min_bounds)
-    max_bounds = torch.FloatTensor(max_bounds)
+    # min_bounds = torch.FloatTensor(min_bounds)
+    # max_bounds = torch.FloatTensor(max_bounds)
+    min_bounds = expand_bounds(min_bounds, x.size(0))
+    max_bounds = expand_max_bounds(max_bounds, x.size(0))
+    min_bounds = torch.as_tensor(min_bounds, dtype=torch.float32)
+    max_bounds = torch.as_tensor(max_bounds, dtype=torch.float32)
 
-    output = net(x)
+    # output = net(x)
+    output = net(x.unsqueeze(0))
     if output.dim() == 1:
         output = output.unsqueeze(0)
     probs = torch.sigmoid(output)
-    orig_pred = (probs > 0.5).long().item() # get the index of the max log-probability
+    orig_pred = (probs > 0.5).long().item()
 
-    w = np.zeros(input_shape)
-    r_tot = np.zeros(input_shape)
+    # w = np.zeros(input_shape)
+    # r_tot = np.zeros(input_shape)
+    w = torch.zeros_like(x)
+    r_tot = torch.zeros_like(x)
 
     loop_i = 0
     while loop_i < maxiters:
-                
         # Origin class
-        output = net(x)
+        # output = net(x)
+        output = net(x.unsqueeze(0))
         if output.dim() == 1:
             output = output.unsqueeze(0)
         probs = torch.sigmoid(output)
 
         probs.backward(retain_graph=True)
-        grad_orig = x.grad.data.numpy().copy()
+        # grad_orig = x.grad.data.numpy().copy()
+        grad_orig = x.grad.data.clone()
         
         x.grad.zero_()
 
         # Target class
         (1-probs).backward(retain_graph=True)
         
-        cur_grad = x.grad.data.numpy().copy()
-            
+        # cur_grad = x.grad.data.numpy().copy()
+        cur_grad = x.grad.data.clone()
+        
         # set new w and new f
         w = cur_grad - grad_orig
-        f = ((1-probs) - probs).data.numpy()
+        # f = ((1-probs) - probs).data.numpy()
+        f = ((1-probs) - probs).data.squeeze()
 
-        pert = abs(f)/np.linalg.norm(w.flatten())
+        # pert = abs(f)/np.linalg.norm(w.flatten())
+        pert = torch.abs(f) / w.norm()
     
         # compute r_i and r_tot
         # Added 1e-4 for numerical stability
-        r_i =  (pert+1e-4) * w / np.linalg.norm(w)   
+        # r_i =  (pert+1e-4) * w / np.linalg.norm(w)
+        r_i =  (pert+1e-4) * w / w.norm()
         
         if len(weights) > 0:
-            r_i *= np.array(weights)
+            # r_i *= np.array(weights)
+            r_i *= torch.tensor(weights, dtype=torch.float32)
 
         # limit huge step
-        r_i = alpha * r_i / np.linalg.norm(r_i) 
+        # r_i = alpha * r_i / np.linalg.norm(r_i) 
+        r_i = alpha * r_i / r_i.norm()
             
-        r_tot = np.float32(r_tot + r_i)
-        
-        pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        # r_tot = np.float32(r_tot + r_i)
+        r_tot = r_tot + r_i
+        # pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
+        pert_x = x_old + (1 + overshoot) * r_tot
+        pert_x = x_old.view(-1) + (1 + overshoot) * r_tot
+        print("pert_x", pert_x)
+        print("pert_x.shape", pert_x.shape)
+        print("min_bounds", min_bounds)
+        print("min_bounds.shape", min_bounds.shape)
+        print("max_bounds", max_bounds)
+        print("max_bounds.shape", max_bounds.shape)
         pert_x = clip(pert_x, min_bounds, max_bounds)
 
         x = Variable(pert_x, requires_grad=True)
 
-        output = net(x)
+        # output = net(x)
+        output = net(x.unsqueeze(0))
         if output.dim() == 1:
             output = output.unsqueeze(0)
         probs = torch.sigmoid(output)
-        k_i = (probs > 0.5).long().item() # get the index of the max log-probability
+        k_i = (probs > 0.5).long().item()
 
         if k_i != orig_pred:
             break
