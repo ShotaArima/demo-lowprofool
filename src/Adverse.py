@@ -282,12 +282,12 @@ def deepfool(x_old, net, maxiters, alpha, bounds, weights=[], overshoot=0.002):
         # pert_x = x_old + (1 + overshoot) * torch.from_numpy(r_tot)
         pert_x = x_old + (1 + overshoot) * r_tot
         pert_x = x_old.view(-1) + (1 + overshoot) * r_tot
-        print("pert_x", pert_x)
-        print("pert_x.shape", pert_x.shape)
-        print("min_bounds", min_bounds)
-        print("min_bounds.shape", min_bounds.shape)
-        print("max_bounds", max_bounds)
-        print("max_bounds.shape", max_bounds.shape)
+        # print("pert_x", pert_x)
+        # print("pert_x.shape", pert_x.shape)
+        # print("min_bounds", min_bounds)
+        # print("min_bounds.shape", min_bounds.shape)
+        # print("max_bounds", max_bounds)
+        # print("max_bounds.shape", max_bounds.shape)
         pert_x = clip(pert_x, min_bounds, max_bounds)
 
         x = Variable(pert_x, requires_grad=True)
